@@ -1,13 +1,14 @@
+import sys
+import os
 import json
 import math
 import nltk
-from gensim import corpora, models, similarities
 
 stopwords = nltk.corpus.stopwords.words('english')
 stemmer = nltk.stem.porter.PorterStemmer()
 
 class MyDocument:
-    def __init__(self):
+    def __init__(self,max_id):
 	#merchant name
 	self.merchant = []
 	#title of document
@@ -20,9 +21,11 @@ class MyDocument:
 	self.bow = []
 	#the concatenation of all other features
 	self.concatenation = []
-	self.max_id = 0
+	self.max_id = max_id
+	#dicionario que mapeia numeros -> palavras
+	#self.dict_words = {}
 
-    def map_words_concatenation(self,lst_word,dict_words):
+    def map_words_concatenation(self,lst_word,global_dict,global_dict_num):
 	#map words to numbers
 	#max_id = len(dict_words.keys())
 	lst_numbers = []
@@ -30,77 +33,80 @@ class MyDocument:
 
 	for w in lst_word:
 	    n = -1
-	    if (w not in dict_words):
-		dict_words[w] = [self.max_id]
+	    if (w not in global_dict):
+		global_dict[w] = [self.max_id]
+		global_dict_num[self.max_id] = w
 		tf[w] = True
 		n = self.max_id
 		self.max_id = self.max_id + 1
 	    else:
 		#esta no dicionario global, mas nao esta no local
 		if (w not in tf):
-		    dict_words[w].append(self.max_id)
+		    global_dict[w].append(self.max_id)
+		    global_dict_num[self.max_id] = w
 		    tf[w] = True
 		    n = self.max_id
 		    self.max_id = self.max_id + 1
 		else:
 		    #o ultimo elemento a ser acrescentado no dicionario global
 		    #eh considerado o id da palavra
-		    n = dict_words[w][-1]
+		    n = global_dict[w][-1]
 	    lst_numbers.append(n)
 
 
 	return lst_numbers
 
-    def map_words(self,lst_word,dict_words):
+    def map_words(self,lst_word,global_dict,global_dict_num):
 	#map words to numbers
 	#max_id = len(dict_words.keys())
 	lst_numbers = []
 
 	for w in lst_word:
-	    if (w not in dict_words):
-		dict_words[w]= [self.max_id]
+	    if (w not in global_dict):
+		global_dict[w]= [self.max_id]
+		global_dict_num[self.max_id] = w
 		self.max_id = self.max_id + 1
-	    lst_numbers.append(dict_words[w][0])
+	    lst_numbers.append(global_dict[w][0])
 
 
 	return lst_numbers
 
-    def read_json(self,data,dict_words):
+    def read_json(self,data,global_dict,global_dict_num):
 	#usa separadamente cada um para teste
 
 	if ("merchant" in data):
 	    lst_merchant = data["merchant"].lower().split()
 	    word_list = [stemmer.stem(w) for w in lst_merchant if w.lower() not in stopwords]
-	    self.merchant = self.map_words(word_list,dict_words)
-	    self.concatenation += self.map_words_concatenation(word_list,dict_words)
+	    self.merchant = self.map_words(word_list,global_dict,global_dict_num)
+	    self.concatenation += self.map_words_concatenation(word_list,global_dict, global_dict_num)
 	    self.bow += self.merchant
 
 	if ("title" in data):
 	    lst_title = data["title"].lower().split()
 	    word_list = [stemmer.stem(w) for w in lst_title if w.lower() not in stopwords]
-	    self.title = self.map_words(word_list,dict_words)
-	    self.concatenation += self.map_words_concatenation(word_list,dict_words)
+	    self.title = self.map_words(word_list,global_dict,global_dict_num)
+	    self.concatenation += self.map_words_concatenation(word_list,global_dict,global_dict_num)
 	    self.bow += self.title
 
 	if ("highlight" in data):
 	    lst_highlight = data["highlight"].lower().split()
 	    word_list = [stemmer.stem(w) for w in lst_highlight if w.lower() not in stopwords]
-	    self.highlight = self.map_words(word_list,dict_words)
-	    self.concatenation += self.map_words_concatenation(word_list,dict_words)
+	    self.highlight = self.map_words(word_list,global_dict,global_dict_num)
+	    self.concatenation += self.map_words_concatenation(word_list,global_dict,global_dict_num)
 	    self.bow += self.highlight
 
 	if ("description" in data):
 	    lst_description = data["description"].lower().split()
 	    word_list = [stemmer.stem(w) for w in lst_description if w.lower() not in stopwords]
-	    self.description = self.map_words(word_list,dict_words)
-	    self.concatenation = self.map_words_concatenation(word_list,dict_words) 
+	    self.description = self.map_words(word_list,global_dict,global_dict_num)
+	    self.concatenation = self.map_words_concatenation(word_list,global_dict,global_dict_num) 
 	    self.bow += self.description
-
 
 class Features:
     def __init__(self,ftr_list):
 	self.avg = {}
 	self.aiff_vector = {}
+	self.iff = {}
 	for f in ftr_list:
 	    self.avg[f] = 0.0
 	    self.iff[f] = {}
@@ -122,25 +128,24 @@ class Features:
         ts = {}
 
 	#percorrendo cada feature
-	if (self.title != []):
-	    self.count_term(self.title,ts)
+	if (mydoc.title != []):
+	    self.count_term(mydoc.title,ts)
 
-	if (self.merchant != []):
-	    self.count_term(self.merchant,ts)
+	if (mydoc.merchant != []):
+	    self.count_term(mydoc.merchant,ts)
 
-	if (self.highlight != []):
-	    self.count_term(self.highlight,ts)
+	if (mydoc.highlight != []):
+	    self.count_term(mydoc.highlight,ts)
 
-	if (self.bow != []):
-	    self.count_term(self.bow,ts)
+	if (mydoc.bow != []):
+	    self.count_term(mydoc.bow,ts)
 
-	if (self.description != []):
-	    self.count_term(self.description,ts)
+	if (mydoc.description != []):
+	    self.count_term(mydoc.description,ts)
 
-	if (self.concatenation != []):
-	    self.count_term(self.concatenation,ts)
-
-        return ts
+	if (mydoc.concatenation != []):
+	    self.count_term(mydoc.concatenation,ts)
+        return ts.items()
 
     def feature_spread(self,mydoc,ts):
 	fs = {}
@@ -303,19 +308,65 @@ class Features:
 
 class MyCorpus:
 
-    def read(self,file_name):
+    def __init__(self,ftr_list):
+	self.featuresObj = Features(ftr_list)
+	#o maior id de uma palavra do vocabulario no momento
+	self.max_id = 0
+
+    def read(self,file_name,global_dict,global_dict_num):
 
 	fd = open(file_name)
 	data = json.load(fd)
 
-        deals = []
-	for d in data:
-	    doc = MyDocument()
-	    dict_doc = {}
-	    doc.read_json(d, dict_doc)
-	    deals.append(doc)
+	doc = MyDocument(self.max_id)
+	self.max_id = doc.max_id
+	doc.read_json(data,global_dict,global_dict_num)
 	fd.close()
+	return doc
 
-    def ts_deals(self,deals):
-	#transforma cada deal em um term spread vector
+    def ts_deal(self,deal):
+	return self.featuresObj.term_spread(deal)
+
+    def load_corpus(self,file_data):
 	pass
+    def process(self,dir_data,dir_out=""):
+
+        #percorrer diretorio de deals
+        deals = {}
+        global_dict = {}
+        global_dict_num = {}
+        for subdir, dirs, files in os.walk(dir_json):
+	    for f in files:
+	        fileName, fileExtension = os.path.splitext(f)
+	        #print "Processing features ",fileName,"..."
+                d = self.read(os.path.join(subdir,f),global_dict,global_dict_num)
+	        #guardar cada vetor de features de d, que neste 
+	        #caso eh o term spread
+	        deals[int(fileName)] = self.ts_deal(d)
+	ndeals = len(deals.keys())
+
+        #ordered_deals = []
+	#escrever de forma ordenada crescente no arquivo de corpus
+	#for i in xrange(1,ndeals+1):
+	#    try:
+	#        ordered_deals.append(deals[i])
+	#    except KeyError:
+#		print "Warning: File ",i," was not processed"
+	#TODO: nao serializa do jeito que pensei..por enquanto processar memso
+	#corpora.MmCorpus.serialize(os.path.join(dir_out,'data.mm'),ordered_deals)
+	return (deals,global_dict_num)
+
+if __name__ == "__main__":
+    #TODO: os dados sao misturados? livingsocial e e groupon?
+    #TODO: como separar um documento para um topico?
+    #TODO: o numero de topicos foram variados, colocar isso no codigo como 
+    #parametro 
+    #TODO: Existe treino e teste?
+    dir_json = sys.argv[1]
+    #ftr_list = ["highlight","title","concatenation","merchant","bow","description"]
+    ftr_list = ["title","concatenation","merchant","bow","description"]
+    mycorpusObj = MyCorpus(ftr_list)
+    dir_out = "../daily-deals-data/ls-txt-ftrs/"
+    mycorpusObj.process(dir_json,dir_out)
+
+
