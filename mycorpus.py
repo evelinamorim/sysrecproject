@@ -335,7 +335,7 @@ class MyCorpus:
         deals = {}
         global_dict = {}
         global_dict_num = {}
-        for subdir, dirs, files in os.walk(dir_json):
+        for subdir, dirs, files in os.walk(dir_data):
 	    for f in files:
 	        fileName, fileExtension = os.path.splitext(f)
 	        #print "Processing features ",fileName,"..."
