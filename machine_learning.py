@@ -1,14 +1,16 @@
 ## machine learning to given objects
 import mycorpus
+import deal
+
 import config
 import util
 import sys
 import re
 import os
-
 import time 
 
 from sklearn.externals import joblib
+from sklearn import feature_extraction
 from sklearn import svm
 from gensim import corpora, models, similarities
 from gensim.models import ldamodel
@@ -16,34 +18,6 @@ from gensim.models import ldamodel
 open_quote = re.compile("\"[\w]+")
 close_quote = re.compile("[\w\.\-]+\"")
 
-def compara_datas(d1,d2):
-    #dada duas datas como strings e cuja repsentacao eh: mm/dd/yyyy
-    #retorna 1 se d1 eh maior, 0 se sao iguais e -1 se d1 eh menor
-    d1_lst = d1.split("/")
-    d2_lst = d2.split("/")
-
-    #comparando ano
-    if (int(d1_lst[2])>int(d2_lst[2])):
-	return 1
-    else:
-	if (int(d1_lst[2])<int(d2_lst[2])):
-	    return -1
-	else:
-	    #comparar mes
-	    if (int(d1_lst[0])>int(d2_lst[0])):
-		return 1
-	    else:
-		if  (int(d1_lst[0])<int(d2_lst[0])):
-		    return -1
-		else:
-		    #comparar dia
-		    if (int(d1_lst[1])>int(d2_lst[1])):
-			return 1
-		    else:
-			if (int(d1_lst[1])<int(d2_lst[1])):
-			    return -1
-			else:
-			    return 0
 
 
 class machine_learning:
@@ -58,12 +32,23 @@ class machine_learning:
 
 	self.ftr_list = self.__config_obj.get_value("ftr_names")
 	self.header = []
+	#o header que foi pre processado
+	self.new_header = [] 
 	self.target_ftr = -1
 	self.target = {}
 	#k eh o numero de treinos em temas
 	self.k = k
 	self.model_topic = None
-	self.model_deal_size = None
+	self.model_deal_size = {}
+
+	#historico de features de ofertas ateh uma data corrente
+	self.__deal_history = []
+	self.__deal_txt_history = []
+	self.__target_history = []
+
+	self.__vec = feature_extraction.DictVectorizer()
+	#numero de features transformadas
+	self.__nvec = -1
 
     def pre_process_header(self):
 	"""
@@ -77,12 +62,13 @@ class machine_learning:
 	pos_key = -1
 	nvalues = len(self.header)
 
-	target_name = self.__config_obj.get_value("target_ftr")
+	target_name = self.__config_obj.get_value("target_ftr")[0]
 
 	#quais as posicoes em header que serao efetivamente usadas
 	for i in xrange(0,nvalues):
 	    if (self.header[i] in self.ftr_list):
 		new_header_pos.append(i)
+		self.new_header.append(self.header[i])
 	        if (self.header[i] == "started_at"):
                     #capturar a data para montar o historico
 		    pos_key = len(new_header_pos)-1
@@ -157,6 +143,7 @@ class machine_learning:
 	ftrs_lines = fd.readlines()
 	self.header = ftrs_lines.pop(0).split(",")
 	pos_key,header_pos = self.pre_process_header()
+	general_doc_list = []
 	for l in ftrs_lines:
 	    #tem que transformar estas features em seus respectivos tipos
 	    ftrs_values,target = self.process_values(header_pos,self.tokenize_features(l))
@@ -165,49 +152,159 @@ class machine_learning:
 	    #colocar o identificador do documento na lista
 	    #mas ai cho que vai ser dificil localizar tbm? Nao, pois daqui 
 	    #ja pego as features textuais do documento
+	    general_doc_list.append(deal.Deal(ftrs=ftrs_values).get_ftrs_dict(self.new_header))
 	    ftrs_values = [init_id ] + ftrs_values
 	    #pos_key+1 pois acrescentei o id do documento na frente
 	    #print ftrs_values[pos_key+1]
 	    if (ftrs_values[pos_key+1] in doc_list):
 	         doc_list[ftrs_values[pos_key+1]].append(ftrs_values)
-		 target_value[ftrs_values[pos_key+1]].append(target)
+		 target_value[ftrs_values[self.target_ftr+1]].append(target)
 	    else:
 	         doc_list[ftrs_values[pos_key+1]] = [ftrs_values]
-		 target_value[ftrs_values[pos_key+1]] = [target]
+		 target_value[ftrs_values[self.target_ftr+1]] = [target]
 	    init_id = init_id +1 
 	fd.close()
+	self.__vec.fit(general_doc_list)
 	return doc_list,target_value
 
-    def split_by_topic(self,i,dates,data,target):
+    def split_by_topic(self,i,dates,data,target,data_txt):
 	"""
-	Given the topics of the current self.model_topic,
-	separate topic by 
-	"""
-	new_data = []
 
-	#TODO: Acho que farei o processo a seguir na funcao que a chama mesmo
-	#separar o historico ateh a data dates[i] remover a feature docid
-	for k in xrange(0,i):
-	    for deal in data[dates[k]]:
-	        doc_id = deal[0]
-		     ftrs_txt = doc_list_txt[doc_id]
-	             new_doc_list_txt.append(ftrs_txt)
-		
-	data_bytopic = {}
+	Given the topics of the current self.model_topic,
+	separate topic by
+
+	TODO: esse historico eu poderia guardar direto na classe nao?
+
+	@i: indice que determina qual data devo coletar como historico 
+	    nos dados das ofertas fornecidas
+	@date: vetor de datas existentes nos dados. Estas datas estao 
+	       ordenadas em forma crescente
+	@data: dicionario que mapeia data -> features das ofertas
+	@target: dicionario que mapeia data para valor do deal size. A ordem 
+	        que os valores do target foram adicionados, eh a mesma 
+		ordem que os valores foram adicionados em data
+	@data_txt:dicionario que mapeia um documento (doc_id) para sua features 
+	textuais
+	"""
+
+        #separar os dados por data
+	ndeal_day = len(data[dates[i]])#pegar as deals do dia dado
+	for k in xrange(0,ndeal_day):
+            #adicionando as ofertas e ignorando o docid, que esta
+            #na posicao 0
+
+	    #k-esima deal no dia date[i]
+	    try:
+	        doc_id = data[dates[i]][k][0]
+                #print data[dates[i]][k],len(data[dates[i]][k])
+		#print ">",doc_id,target[dates[i]][k]
+	        #Deal(doc_id,daeal_ftrs,deal_ftrs_txt,target_deal)
+	        d = deal.Deal(doc_id,data[dates[i]][k][1:],data_txt[doc_id],target[dates[i]][k])
+	        self.__deal_history.append(d)
+	    except KeyError:
+		print "*** Warning *** There is no document ",doc_id
+
+
+        #separar os dados por topico
+	self.data_bytopic = {}
 	target_bytopic = {}
+
+	#para cada deal no historico verificar em qual topico ela esta
+	# o modelo eh sempre atualizado, entao eu tenho que reclassificar 
+	#o historico sempre
+	for deal_item in self.__deal_history:
+	    topic_list = self.model_topic[deal_item.get_ftrs_txt()]
+	    #ordenar da menor probabilidade para a maior
+	    topic_list.sort(key=lambda tup: tup[1])
+
+	    self.add2topic(topic_list,deal_item,self.data_bytopic)
+
+    def add2topic(self,topic_list,deal_item,data_bytopic):
+	"""
+	Dada uma lista de probabilidades adicionar o item para cada topico
+	de acordo com alogum criterio definido:
+	* de acordo com o threshold da probabilidade
+	* de acordo com um threshold para numero de topicos
+	* apenas um topico
+	"""
+
+	ntopics = len(topic_list)-1
+	t,prob = topic_list[ntopics]
+	if (t in data_bytopic):
+	     data_bytopic[t].append(deal_item)
+	else:
+	     data_bytopic[t] = [deal_item]
+
+    def test(self,i,dias,doc_list,doc_txt_list,dict_num):
+	"""
+	Prediz com o SVR o deal size
+	TODO: predizer com o expectation-maximization
+
+	@i: predizer o i+1-esimo dia  com base no topico das 
+	deals dadas e em suas features textuais
+	@dias: data de dias na base de dados
+	@doc_list: features das deals
+	@doc_txt_list: features textuais
+	@dict_num: dicionario de mapeamento num->palavras
+	"""
+
+	#predizer o topico de cada oferta em test_data
+	deals_topic ={} 
+	for d in doc_list[dias[i+1]]:
+	    doc_id = d[0]
+	    try:
+	        ftrs_txt = doc_txt_list[doc_id]
+	        #usar o modelo corrente para classificar o topico
+		topic_list = self.model_topic[ftrs_txt]
+		topic_list.sort(key=lambda tup: tup[1])
+		deal_obj = deal.Deal(doc_id,d[1:],doc_txt_list[doc_id])
+		self.add2topic(topic_list,deal_obj,deals_topic)
+		#print d,(len(d))!=11
+	    except KeyError:
+		print "*** Warning *** There is no documento ",doc_id
+
+        #apos a divisao por topicos, classificar com o svr
+	pred = {}
+	for t in deals_topic:
+	    #como acessar o doc_id para depois fazer a avalicao?
+	    #for k in deals_topic[t]:
+	    #     print len(k.get_ftrs_dict(self.new_header))
+	    data_t = [k.get_ftrs_dict(self.new_header) for k in deals_topic[t]]
+	    #print data_t
+            vec_test_data = self.__vec.transform(data_t)
+
+	    pred_t = self.model_deal_size[t].predict(vec_test_data)
+	    ndealstopic = len(deals_topic[t])
+	    #TODO: esse i  esta estranho
+	    pred[t] = [(deals_topic[t][k].get_docid(),pred_t[k]) for k in xrange(0,ndealstopic)]
+
+        return pred
+
+    def one_class(self,target):
+	"""
+	Checa se soh existe apenas uma classe neste grupo
+	"""
+	if (len(target)==1):
+	    return True
+	else:
+	    i = 0
+	    elem  = target[i]
+	    ntargets = len(target)
+	    i = i+1
+	    while (i < ntargets):
+		if (target[i]!=elem):
+		    return False
+		i = i+1
+	    return True
 
     def train(self,idate,date,doc_list,target_value,doc_list_txt,dict_num):
 
-	date_nums = date[idate].split("/")
-	date_nums_str = ""
+	date_num = date[idate]
 
-	for d in date_nums:
-	    date_nums_str += "_" + d
-
-	lda_model_file = self.lda_dir + self.data_name + date_nums_str
+	lda_model_file = self.lda_dir + self.data_name + str(date_num)
 
 	if (os.path.isfile(lda_model_file)):
-	    model_topic = ldamodel.LdaModel.load(lda_model_file)
+	    self.model_topic = ldamodel.LdaModel.load(lda_model_file)
 	else:
 	    #dados textuais para o lda
 	    new_doc_list_txt = []
@@ -223,35 +320,55 @@ class machine_learning:
 		    print "*** Warning *** There is no document ",doc_id
 
 	    #fazer o treino do lda
-	    if (idate == 1):
+	    if (self.model_topic == None):
 	         self.model_topic = models.LdaModel(corpus=new_doc_list_txt,id2word=dict_num,num_topics=self.k)
 	    else:
-		self.model_topic.update(new_doc_list)
+		self.model_topic.update(new_doc_list_txt)
 	    self.model_topic.save(lda_model_file)
 
 	#separar os docs de acordo com os topicos encontrados
 	#dados de treino por topico
-	train_data_topic = self.split_by_topic(idate,date,doc_list,target_value)
+        self.split_by_topic(idate,date,doc_list,target_value,doc_list_txt)
 
-        #TODO: tem que aplicar no conjunto de teste, mas como esta 
-	#em um self vou fazer em outra funcao. Fique ciente que 
-	#isso muda na proxima iteracao
+	#print "Data by Topic:",self.data_bytopic.keys()
+
+	#treinando cada topico um svr
+	for t in self.data_bytopic:
+	    train_data_topic = []
+	    target_data_topic = []
+
+	    for d in self.data_bytopic[t]:
+		 train_data_topic.append(d.get_ftrs_dict(self.new_header))
+		 target_data_topic.append(d.get_target())
+            #print "==>",train_data_topic
+            if (not(self.one_class(target_data_topic))):
 
 
-	#fazer o treino do svr: para cada topico!!
-	#TODO: salvar e carregar modelos
-	for t in xrange(0,self.k):
-	     svr_model_file = self.svr_dir + self.data_name + date_nums_str + "_"\
-		     + t + ".plk"
+		 vec_train_data_topic = self.__vec.transform(train_data_topic)
 
-	     if (os.path.isfile(svr_model_file)):
-	         self.model_deal_size = joblib.load(svr_model_file)
-	     else:
-	         self.model_deal_size = svm.SVR()
-	         self.model_deal_size.fit(new_data_list,new_target_data)
-	         joblib.dump(self.model_deal_size,svr_model_file)
 
-    def process(self,dir_data,file_features):
+
+	         #TODO: se existe apenas uma classe o svr da divisao por 0!
+	         # e ai? nao treinar e deixar no historico? Ou usar outro classificador?
+	         #pq de certa forma nao tem nada a aprender
+	         #print "1: ",target_data_topic
+	         # print "2: ",train_data_topic
+                 svr_model_file = self.svr_dir + self.data_name + str(date_num) \
+			 + "_" + str(t) + ".plk"
+	         if (os.path.isfile(svr_model_file)):
+	             self.model_deal_size[t] = joblib.load(svr_model_file)
+		 else:
+	             self.model_deal_size[t] = svm.SVR()
+		     #print target_data_topic
+	             self.model_deal_size[t].fit(vec_train_data_topic,target_data_topic)
+	             joblib.dump(self.model_deal_size[t],svr_model_file)
+            else:
+	         #nao sei bem ainda o que faezr na predicao deste caso
+	         self.model_deal_size[t] = None
+	    
+
+
+    def process(self,dir_data,file_features,pred_file="pred.out"):
 
 	#dir_data: guarda o diretorio dos arquivos json de features textuais
 	#lendo features textuais
@@ -266,7 +383,7 @@ class machine_learning:
 	#pegar os dias...
 	dias = doc_list.keys()
 	#..e ordenar crescentemente
-	dias = sorted(dias,cmp=compara_datas)
+	dias = sorted(dias)
         ndias = len(dias)
 	deals_of_day = []
 	#print "-->",dias[ndias-1]
@@ -278,16 +395,34 @@ class machine_learning:
 		#treino nas deals 
 		#descobre topicos com estas deals
 		# e treina o SVR
+		#print "#doc: ",len(doc_txt_list.keys())
 		print "Treino: ",dias[i]
-		print "Teste: ",dias[i+1]
 		self.train(i,dias,doc_list,target_value,doc_txt_list,dict_num)
+		print "Teste: ",dias[i+1]
+		pred = self.test(i,dias,doc_list,doc_txt_list,dict_num)
+		#print pred
+		self.write_predictions(pred,pred_file)
 
 
+    def write_predictions(self,predictions,pred_file):
+
+	fd = open(pred_file,"a")
+
+	for topic in predictions:
+	    for (doc,pred) in predictions[topic]:
+	         fd.write("%s,%f\n" %(doc,pred))
+            fd.write('\n')
+
+	fd.close()
 
     def compare_dates(self):
 	#TODO
 	pass
 
 if __name__ == "__main__":
+    #TODO: ver o que tem no target, pois as predicoes estao com numero baixo!
+    # no target esta com valor errado tbm. Conferir se esta pegando certo mesmo
+    # Os numeros estao melhores
+    #Esquema de peso utilizado: term spread
     ml_obj = machine_learning("options.conf")
     ml_obj.process("../daily-deals-data/ls-json/","../daily-deals-data/ls-deals.csv")

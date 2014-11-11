@@ -340,9 +340,12 @@ class MyCorpus:
 	        fileName, fileExtension = os.path.splitext(f)
 	        #print "Processing features ",fileName,"..."
                 d = self.read(os.path.join(subdir,f),global_dict,global_dict_num)
+
 	        #guardar cada vetor de features de d, que neste 
 	        #caso eh o term spread
+
 	        deals[int(fileName)] = self.ts_deal(d)
+
 	ndeals = len(deals.keys())
 
         #ordered_deals = []
