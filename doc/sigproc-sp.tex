@@ -95,13 +95,16 @@ Although there is practical importance of deal size prediction task,
 there are a minimal amount of research. For these reason, we proposed 
 a method based on Lacerda's research in order to achieve better results. 
 Nevertheless, our proposal supposes that deals can belong to more than 
-one market. %the results balbla
+one market. The results show that consider all markets probably introduce 
+predictions errors in deal size prediction and 
+deal only with more likely markets reduce such predictions errors.
+%the results balbla
 
 \section{Methodology}
 
 The methodology that we propose is comprised by three steps: 
 separation of the deals of the catalog into markets, regression training 
-of the deals, and expectation-maximization of the deals in the same 
+of the deals, and computing the competition between deals in the same 
 market. Althought, our steps are very similar to Lacerda's steps, 
 the first step is modified in order to assign each offer to the 
 most likely markets.
@@ -112,7 +115,7 @@ the evaluation metric employed to evaluate our results.
 \subsection{Algorithm}
 
 The algorithm is composed by three phases: Market identification, 
-Regression per Market, and Market Weighting. Next, we will 
+Regression per Market, and Market Competion Weighting. Next, we will 
 describe how these three phases are implemented.
 
 \textbf{Market Identification.} Each deal presents textual features 
@@ -129,10 +132,11 @@ we consider tokens that appear in at least 25\%  of documents.
 
 After process textual features,
 Latent Dirichlet Allocation (LDA) 
-method is applied in order to identified the markets. LDA method 
+method is applied in order to identify the markets. LDA method 
 build probabilistic distributions in order to infer latent topics 
-in a given collection. The probabilistic distribution are assemble 
-based on a weight, which can be, for instance, term frequency in 
+in a given collection. The probabilistic distribution are assembled
+based on a defined weight assigned to words. The weights can be, 
+for instance, term frequency in 
 the document. The weigthing scheme in this research is 
 \emph{term spread}, which is defined by the Equation 
 \ref{eq:termspread}.
@@ -167,7 +171,7 @@ following deal features:
 
 
 Each regression model predicts 
-the deals of the test set, whether one deal belongs to more than one 
+the deal size of the test set, when one deal belongs to more than one 
 market, then a weighted mean is computed according to Equation \ref{wpred}, 
 where $\sigma(d,t)$ is the predicted value for the deal $d$, if the deal 
 belongs to market $t$.
@@ -180,14 +184,14 @@ belongs to market $t$.
 Prediction step is applied 
 only to deals of the day and we employ and SVR as 
 regression method. 
-There are as many classifiers as latent markets.
+There are as many SVR's classifiers as latent markets.
 
 \textbf{Market Weighting}. After the building of regressor classifiers, 
-weights are computed to consider the impact of the market in deal size 
-prediction. The processes of compute market weights starts with the partition of 
+weights are computed to consider the impact of the market competition in deal size 
+prediction. The processes of computation of market weights start with the partition of 
 the catalog into $k$ markets, so that $S =\{S_{m_1},S_{m_2},\cdots,S_{m_k}\}$.
 Each deal $q \in S$ belongs to one or more markets, and we call $S_q$ the 
-subset of markets that owns $q$. Again, in these step we consider the 
+subset of markets that owns $q$. In this step we consider the 
 prediction as an weigthted mean of predictions. For each market $S^{j}_q \in S_q$ 
 we compute the Equation \ref{sigma}.
 
@@ -224,20 +228,18 @@ of predicted deals.
 \subsection{Evaluation}
 
 There are many ways to evaluate recommender systems. However, our task 
-is not the recommendation itself and but a support task for 
-recommender systems. Also, the sizes of the deals can vary greatly and 
-we model our problem as a regression problem.
-For these reasons, we adopt the 
-\emph{Root Relative Square Error} (RRSE)  as evaluation metric, which is 
-defined by Equation \ref{rrse}. 
+is not the recommendation itself but a support task for 
+recommender systems. Also, the sizes of the deals can vary greatly  
+, hence to evaluate our 
+prediction, we normalized our dataset using standard deviation of 
+whole collection. Otherwise, 
+our predictions errors reach high values and we are unable to 
+identify the potential of our proposal. 
+We adopt the 
+\emph{Root Mean Square Error} (RMSE)  as evaluation metric, which is 
+defined by Equation \ref{rmse}. 
 
-\begin{equation}
-    RRSE(y,\hat{y}) = \sqrt{\frac{\sum_{i=1}^n (\hat{y_i}-y_i)^2}{\sum_{i=1}^n (\bar{y}-y_i)^2}}
-    \label{rrse}
-\end{equation}
 
-, where $\hat{y_i}$ is the i-th predicted value, $\bar{y}$ is the mean of 
-labels $y$ , and $n$ is the number of predicted values.
 
 \section{Experiments and Results}
 
@@ -281,51 +283,61 @@ and the most of them between median and the maximum value.
 \subsection{Experiments}
 
 Due to the time constraints and difficulties in the interpretation of 
-the description of the strategy, it was not possible perform the 
+ the strategy's description, it was not possible perform the 
 experiments as we wish. 
 
 %guidelines
 %1
-Larcerda employed an SVR classifier for each market and then 
-an EM method. Also, in the Larceda's research was performed 
-a grid search for find the best SVR classifier for each market and 
+Lacerda employed an SVR classifier for each market and then 
+an EM method. Also, Lacerda performed 
+a grid search to find the best SVR classifier for each market 
 and SVR rbf kernel was employed. However, we considered linear 
 kernel for grid search as well. The linear kernel performs  
-efficientle in datasets that are linearly. The parameters for 
-our grid search was $C = \{0.01,0.1,$$1,5,10,50\}$ and 
+efficiently in datasets that are linearly separable. The parameters for 
+our grid search were $C = \{0.01,0.1,$$1,5,10,50\}$ and 
 $\gamma = \{0,0.001,0.0000001\}$.
 
 
 %2
-The EM procedure was not clear in the Lacerda's P.h.d. thesis. The definition of 
+The EM procedure was not clear in Lacerda's P.h.d. thesis. The definition of 
 the EM method ~\cite{hastie2009elements} comprises the likelihood 
 of an mixture statiscal distribution. However, the definition 
 provided is unclear whether the likelihood is applied in the 
-method. Although the description of the discovery of the 
-marketing competition is vague, we attemped to implement 
+method. Although the description of  the 
+marketing competition phase is vague, we attemped to implement 
 the procedure described. Nevertheless, we failed in reproducing 
 the EM step.
 
 Despite of the problems in reproducing Larceda's research, we 
-attempt to evaluate the  RRSE for SVR strategy. The ideia is 
+attempt to evaluate the  RMSE for SVR strategy. The ideia is 
 to test the hypothesis that employing best market to 
 predict deal size can be improved considering all the possible 
 market or considering the markets above a threshold.
 
-Table \ref{rmsetable} shows the best results for the best market, 
-all markets and threshold market. The threshold tested was $0.3$, i.e., 
+Table \ref{rmsetable} shows the average for thirty markets,  
+nine executions for each strategy and 90\% of confidence.
+The threshold tested was $0.3$, i.e., 
 only the markets that has the probility of $0.3$ or above to 
-own one given deal is considered in the weighted mean of such deal.
+ one given deal is considered in the weighted mean of such deal. 
+The difference between Best-Market 
+Strategy and All-Market is 
+inconclusive, as well as the difference between Best-Market and 
+All-Market. However, the difference between All-Market and 
+Threshold-Market is significant. The threshold of Threshold-Market 
+probably removes unlikely markets, and then it reduces errors
+that All-Markets strategy includes when consider unlikely 
+markets. 
+
 
 \begin{table}[H]
     \centering
-    \caption{RRSE for all the strategies and 30 markets}
+    \caption{RMSE for all the strategies and 30 markets}
     \label{rmsetable}
     \begin{tabular}{lc} \hline
-	Strategy & RRSE \\ \hline \hline
-	Best & 1.03\\
-        All & 1.13 \\
-	Threshold & 1.06 \\ \hline
+	Strategy & RMSE \\ \hline \hline
+	Best & 1.06\\
+        All & 1.12 \\
+	Threshold & 0.99 \\ \hline
     \end{tabular}
 \end{table}
 
@@ -333,9 +345,8 @@ The results we obtain are slightly better that Lacerda reports,
 however our dataset is different and we also experimented 
 linear kernel in our grid search. 
 
-The Figure ~\cite{rrsemarkets} shows a graph for the evolution 
-of the error 
-for \emph{All} strategy and \emph{Threshold} strategy. The behavior of 
+The Figure ~\ref{rmsemarkets} presents a graph of the error 
+for different values of markets. The behavior of 
 both strategies are similar to the Lacerda's strategy. We observe that 
 the behavior of \emph{Best} strategy is consistently better 
 than \emph{All} strategy. While the \emph{threshold} strategy is better 
@@ -345,14 +356,63 @@ the other two strategies.
 \begin{figure}[H]
     \centering
     \includegraphics[scale=0.5]{rrsemarkets.png}
-    \caption{RRSE vs. \#Markets}
-    \label{rrsemarkets}
+    \caption{RMSE vs. \#Markets}
+    \label{rmsemarkets}
 \end{figure}
 
-Our experiments were performed without compute confidence interval and 
-another statistical tests. As we consider these experiments only 
-as initial results, we intend to perform carefully tests in order 
-to corroborate the results from initial experiments.
+
+The errors for each topic in one execution 
+is presented by Table \ref{errortopic}. In some markets, 
+All strategy performed well, this usually happens when 
+LDA defined a miscellaneous market and also there is a 
+high standard deviation in such markets. However, 
+in most markets Threshold and Best Strategy are superior.
+Also, in all execution always there are markets that own 
+more deals than others markets. This is expected, since 
+the dataset itself present some numerous categories, and 
+although category is different from the topic concept, 
+it is an evidence that the dataset is unbalanced.
+
+\begin{table}[h]
+\centering
+\label{errortopic}
+\caption{Error by Topic in one Execution}
+\begin{tabular}{lllll}\hline
+Topic & \#docs & Best & All    & Threshold     \\ \hline \hline
+0     & 95    & 0.57  & 0.65 & 0.54 \\
+1      & 64    & 0.89 & 1.11 & 1.10 \\
+2      & 27    & 1.08 & 1.24 & 1.17 \\
+3      & 35    & 0.48 & 0.56 & 0.39 \\
+4      & 35    & 1.25 & 1.43 & 1.56 \\
+5      & 61    & 2.01 & 2.08 & 2.24 \\
+6      & 24    & 0.78 & 0.88 & 0.73 \\
+7      & 32    & 0.43 & 0.56 & 0.55 \\
+8      & 95    & 0.43 & 0.50 & 0.41 \\
+9      & 13    & 2.07 & 2.17 & 2.19 \\
+10     & 56    & 0.43 & 0.47 & 0.37 \\
+11     & 67    & 1.16 & 1.27 & 1.27 \\
+12     & 21    & 1.01 & 1.24 & 1.26 \\
+13     & 36    & 0.91 & 1.05 & 1.12 \\
+14     & 59    & 0.84 & 0.86 & 0.80 \\
+15     & 260   & 1.01 & 1.26 & 1.11 \\
+16     & 93    & 1.13 & 1.27 & 1.30 \\
+17     & 32    & 0.64 & 0.89 & 0.77 \\
+18     & 17    & 1.93 & 1.99 & 0.55 \\
+19     & 22    & 0.77 & 0.73 & 0.54 \\
+20     & 59    & 0.42 & 0.53 & 0.43 \\
+21     & 25    & 0.53 & 0.65 & 0.64 \\
+22     & 24    & 1.16 & 1.33 & 0.65 \\
+23     & 23    & 1.19 & 1.08 & 0.89 \\
+24     & 130   & 1.64 & 1.61 & 1.63 \\
+25     & 38    & 0.86 & 1.00 & 0.53 \\
+26     & 48    & 0.50 & 0.63 & 0.38 \\
+27     & 25    & 0.55 & 0.70 & 0.68 \\
+28     & 37    & 1.44 & 1.41 & 1.59 \\
+29     & 31    & 0.68 & 0.74 & 0.71 \\ \hline
+\end{tabular}
+\end{table}
+
+
 
 \section{Conclusion and Discussion}
 
@@ -364,12 +424,26 @@ It is possible that the errors of all markets
  
  More tests must be perfomed  as well. The groupon dataset was not 
  tested and more tests can produce more insightful clues about 
- more sophisticate techniques, that can consider multi-market deals 
+ more sophisticate techniques, which can consider multi-market deals 
  but avoid to introduce errors like the strategy proposed here. 
 
  Although the strategy here may be introducing errors in the 
  regression prediction, we may investigate whether is this really 
- the case.
+ the case. The threshold strategy also presented an improvement 
+over the initial hypothesis that all likely markets can 
+contribute to deal size prediction. Also, despite the fact that the difference between 
+Best-Market strategy and Threshold-Market strategy is not 
+significant, the Threshold-Market performed consistently well 
+over all executions. These results encourage us to formulate 
+more elaborate strategies that consider multi-market deals. 
+
+The Table \ref{errortopic} shows that the markets own few 
+deals to train in SVR. The errors can be higher due to 
+few deals in each SVR has to consider in the training 
+step. In this case, the groupon dataset can present different 
+results since there are more deals and also more 
+features to SVR.
+
 
 Also, the vague description of the expectation-maximization strategy 
 of Lacerda's P.h.d. thesis, become difficult to implement 
@@ -380,8 +454,7 @@ performed worse compared to best-market for the regression
 module.
 
 More experiments are being made, like the variation in the 
-threshold of the \emph{threshold} strategy. Therefore this report will be 
-incremented with new information.
+threshold of the \emph{threshold} strategy and Groupon dataset.
 %
 % The following two commands are all you need in the
 % initial runs of your .tex file to

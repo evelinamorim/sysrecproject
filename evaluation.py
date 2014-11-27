@@ -4,6 +4,7 @@ import util
 import sys
 import os
 import re
+import time
 
 class Evaluation:
 
@@ -240,7 +241,7 @@ class Evaluation:
 			    
 
 		if t in ndocs_pred:
-		    ndocs_pred[t] = ndocs[t] + 1
+		    ndocs_pred[t] = ndocs_pred[t] + 1
 		else:
 		    ndocs_pred[t] = 1
 
@@ -255,7 +256,7 @@ class Evaluation:
 	    err_top = self.rmse(truth,pred_err_top[t])
 	    err1 = self.rmse(truth,pred1_err_topic[t])
 	    err2 = self.rmse(truth,pred2_err_topic[t])
-	    fd.write("%d,%d,%f,%f,%f\n" % (t,ndocs[t],err_top,err1,err2))
+	    fd.write("%d,%d,%f,%f,%f\n" % (t,ndocs_pred[t],err_top,err1,err2))
 
         err_top_reg = self.rmse(truth,pred_top_regular)
         err1_reg = self.rmse(truth,pred1_regular)
@@ -283,24 +284,31 @@ if __name__ == "__main__":
 		    th_file_lst.append(f)
 		elif (re_all.match(f)):
 		    all_file_lst.append(f)
-    print top_file_lst
-    print th_file_lst
-    print all_file_lst
-    truth = eva.read_truth("../daily-deals-data/ls-deals.csv")
+    #print top_file_lst
+    #print th_file_lst
+    #print all_file_lst
+    truth = eva.read_truth("../ls-deals.csv")
     #truth = eva.read_truth(truth_file)
     #pred = eva.read_pred("pred.out")
     #pred_file = sys.argv[2]
-    #pred_top_file = "pred_top_30.out"
-    #pred_top,pred_top_regular = eva.read_pred_topic(pred_top_file)
+
+    nfiles = min(len(top_file_lst),len(th_file_lst),len(all_file_lst))
+    for i in xrange(nfiles):
+        pred_top_file =  top_file_lst[i]
+        pred_all_file =  all_file_lst[i]
+        pred_th_file =  th_file_lst[i]
+
+        pred_top,pred_top_regular = eva.read_pred_topic(pred_top_file)
+        pred_all,pred_all_regular = eva.read_pred_topic(pred_all_file)
+        pred_th,pred_th_regular = eva.read_pred_topic(pred_th_file)
+
+        eva.compare_results(truth,pred_top,pred_all,pred_th)
 
     #pred_all_file = "pred_all_30.out"
-    #pred_all,pred_all_regular = eva.read_pred_topic(pred_all_file)
 
     #pred_th_file = "pred_threshold_30.out"
-    #pred_th,pred_th_regular = eva.read_pred_topic(pred_th_file)
 
     #cria tabela de de todos os tres tipos estrategias
-    #eva.compare_results(truth,pred_top,pred_all,pred_th)
     #print "top vs all"
     #eva.compare_pred(pred_top,pred_all,truth)
     #print "top vs th"
