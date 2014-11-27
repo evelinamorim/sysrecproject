@@ -77,12 +77,18 @@ class MyDocument:
 
 
 	return lst_numbers
-
+    def replace_digits(self,str_in):
+	str_out = ""
+	for x in str_in:
+	    if x not in string.digits:
+		str_out += x
+	return str_out
     def read_json(self,data,global_dict,global_dict_num):
 	#usa separadamente cada um para teste
 
 	if ("merchant" in data):
-	    lst_merchant = nltk.tokenize.word_tokenize(data["merchant"].lower())
+	    lst_merchant = nltk.tokenize.word_tokenize(\
+		    self.replace_digits(data["merchant"].lower()))
 	    word_list = [stemmer.stem(w) for w in lst_merchant if w.lower() not in stopwords and w not in string.punctuation]
 	    #self.merchant = self.map_words(word_list,global_dict)
 	    self.merchant = word_list
@@ -91,7 +97,8 @@ class MyDocument:
             self.tokens += word_list
 
 	if ("title" in data):
-	    lst_title = nltk.tokenize.word_tokenize(data["title"].lower())
+	    lst_title = nltk.tokenize.word_tokenize(\
+		    self.replace_digits(data["title"].lower()))
 	    word_list = [stemmer.stem(w) for w in lst_title if w.lower() not in stopwords and w not in string.punctuation]
 	    #self.title = self.map_words(word_list,global_dict)
 	    self.title = word_list
@@ -100,7 +107,8 @@ class MyDocument:
             self.tokens += word_list
 
 	if ("highlight" in data):
-	    lst_highlight = nltk.tokenize.word_tokenize(data["highlight"].lower())
+	    lst_highlight = nltk.tokenize.word_tokenize(\
+		    self.replace_digits(data["highlight"].lower()))
 	    word_list = [stemmer.stem(w) for w in lst_highlight if w.lower() not in stopwords and w not in string.punctuation]
 	    #self.highlight = self.map_words(word_list,global_dict)
 	    self.highlight = word_list
@@ -109,7 +117,8 @@ class MyDocument:
             self.tokens += word_list
 
 	if ("description" in data):
-	    lst_description = nltk.tokenize.word_tokenize(data["description"].lower())
+	    lst_description = nltk.tokenize.word_tokenize(\
+		    self.replace_digits(data["description"].lower()))
 	    word_list = [stemmer.stem(w) for w in lst_description if w.lower() not in stopwords and w not in string.punctuation]
 	    #self.description = self.map_words(word_list,global_dict)
 	    self.description = word_list

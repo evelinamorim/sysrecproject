@@ -8,6 +8,7 @@ import util
 import sys
 import os
 import time 
+import math
 
 from sklearn.externals import joblib
 from sklearn import feature_extraction
@@ -46,7 +47,7 @@ class machine_learning:
 	self.k = k
 	self.model_topic = None
 	self.model_deal_size = {}	
-	self.__svr_parameters = {'kernel':['linear','rbf'],'C':[0.01,0.1,1,5,10,50],'gamma': [0.0,0.001,0.0000001]}
+	self.__svr_parameters = {'kernel':['linear','rbf'],'C':[0.01,0.1,1,5,10,50],'gamma': [20,10,2,1,0.5,0.1,0.001]}
 
 	self.__scaler = {}
         #self.__svr_parameters = {'kernel':('linear', 'rbf'), 'C':[1, 10]}
@@ -57,6 +58,7 @@ class machine_learning:
 	self.__vec = feature_extraction.DictVectorizer()
 	#numero de features transformadas
 	self.__nvec = -1
+	self.debug = 0
 
     def get_conf_field(self,field):
 	return self.__config_obj.get_value(field)
@@ -148,8 +150,9 @@ class machine_learning:
 	#data_bytopic eh de dados do treino, entao esta valendo
 	for d in self.data_bytopic[t]:
 	    try:
-	        predict = self.__pred[d.get_docid()]
-	        print ">>",docids[d.get_docid()],d.get_target(),predict
+	        #predict = self.__pred[d.get_docid()]
+		predict = d.get_target()
+		print ">> ", docids[d.get_docid()],predict
 	        competition = competition + (predict*rho)
 	    except KeyError:
 		nonpredict = nonpredict + 1
@@ -160,14 +163,14 @@ class machine_learning:
 	if (real_pred == 0):
 	    return []
 	competition = competition/ real_pred
-	print "Competition: ",competition,t
+	#print "Competition: ",competition,t
 
 	sigma = []
 	for d in self.data_bytopic[t]:
 	     try:
 	         predict = self.__pred[d.get_docid()]
                  s = (0.5*competition) + (0.5*predict)
-		 print "==>",predict,competition,s,d.get_target()
+		 #print "==>",predict,competition,s,d.get_target()
 	         d.set_sigma(s)
 	         sigma.append(d)
 	     except KeyError:
@@ -191,10 +194,10 @@ class machine_learning:
 
         return topic_size
 
-    def expectation_maximization(self,i,dates,global_pred,docids):
+    def expectation_maximization(self,docids,deals_bytopic):
 	#global_pred 
 	rho = self.market_proportion()
-	print rho
+	print "rho: ",rho
 
         target_doc = {}
 	for t in self.data_bytopic:
@@ -202,48 +205,73 @@ class machine_learning:
 		target_doc[docids[deal.get_docid()]] = deal.get_target()
 
 	k = 0
-	max_iter = 5
+	max_iter = 100
         eval_obj = evaluation.Evaluation(self.__config_filename)
 	sigma = {}
 	#descobrindo rho: soh quem esta no treino
 	e = 0
+	count_not_update = 0
 	while (k<max_iter):
 	    pred = {}
 	    diff = e
 	    e = 0
 	    for t in self.data_bytopic:
+		print "topic: ",t
 	        sigma[t] = self.compute_sigma(rho[t],t,docids)
 		    #for deal in sigma[t]:
 		#	did = deal.get_docid()
 		#	self.__pred[did] = random.uniform(-1,1)*e + self.__pred[did]
 		if (sigma[t] == []):
 		    continue
-	        global_s = self.global_sigma(sigma)
-		local_s = self.local_sigma(sigma,t)
-	        rho[t] = local_s/global_s
+	    #apos computar sigma para todos os topicos, computar rho para todos os
+	    #topicos
+	    global_s = self.global_sigma(sigma)
+	    print "Soma do catalogo todo: ",k," ",global_s
+	    for t in self.data_bytopic:
+		print "topic: ",t
+		rho_antigo = rho[t]
+	        if (count_not_update<5):
+		    local_s = self.local_sigma(sigma,t)
+	            rho[t] = local_s/global_s
+		else:
+		    rho[t] = rho[t]*1.1
+		    #print "Pertubando rho ",t,rho_antigo,rho[t]
+		print "new rho: ",rho[t],rho_antigo
 	        pred[t] = [(docids[d.get_docid()],d.get_sigma()) for d in sigma[t]]
+		print "new pred:",pred[t],global_s
 	        e += eval_obj.rmse(target_doc,pred[t])
+
 	    e  = e/len(self.data_bytopic)
-	    #print ">>>",e
+
+	    if (count_not_update>=5):
+		count_not_update = 0
+
+	    if (e == diff):
+		count_not_update = count_not_update + 1
+
+	    print "==>",e,count_not_update
             k = k+1
-	import sys
-	sys.exit()
+
+        sys.exit()
 	#predizer os novos valores de teste
-	pred = {}
 	market = {}
-	for t in global_pred:
+	for t in deals_bytopic:
 	    market[t] = 0.0
-	    for (docid,p) in global_pred[t]:
+	    for deal in deals_bytopic[t]:
+		 p = deal.get_pred()
 		 if (t in rho):
 	             market[t] += p*rho[t]
-            market[t] = market[t]/len(global_pred[t])
+            market[t] = market[t]/len(deals_bytopic[t])
 
         #print "EM"
-	for t in global_pred:
-	    pred[t] = []
-	    for (docid,p) in global_pred[t]:
+	pred = {}
+	for t in deals_bytopic:
+	    #pred[t] = []
+	    for deal in deals_bytopic[t]:
+		p = deal.get_pred()
+		docid = docids[deal.get_docid()]
 	        new_p = 0.5*(market[t]) + 0.5*p
-		pred[t].append((docid,new_p))
+		pred[docid] = new_p
 		self.__pred[docid] = new_p
             #print pred[t]
         return pred
@@ -280,7 +308,29 @@ class machine_learning:
 		 target_value[key] = [target]
 	    init_id = init_id +1 
 
+        mean = 0.0
+        for date_key in target_value:
+	    for t in target_value[date_key]:
+	        mean = mean + t
+
+	mean = mean/init_id
+	std_dev = 0.0
+        for date_key in target_value:
+	    for t in target_value[date_key]:
+		term = t-mean
+	        std_dev =  std_dev+ (term*term)
+
+        std_dev = math.sqrt(std_dev/init_id)
+	normalized_target = {}
+        for date_key in target_value:
+	    for t in target_value[date_key]:
+		norm_t = (t-mean)/std_dev
+		if date_key in normalized_target:
+		    normalized_target[date_key].append(norm_t)
+		else:
+		    normalized_target[date_key] = [norm_t]
 	fd.close()
+
 	self.__vec.fit(general_doc_list)
 	return doc_list,target_value
 
@@ -466,19 +516,20 @@ class machine_learning:
 	    doc_id = d[0]
 	    if (doc_id in docids):
                 doc_id_real = docids.index(doc_id)
-
 	        topic_list = self.model_topic[self.txt_ftrs[doc_id_real]]
                 target = target_values[dias[i+1]][k]
 	        #usar o modelo corrente para classificar o topico
 		topic_list.sort(key=lambda tup: tup[1])
 		deal_obj = deal.Deal(doc_id_real,d[1:],target)
 		self.add2topic(topic_list,deal_obj,deals_topic)
+		self.debug = self.debug + 1
 	    else:
 		print "*** Warning *** There is no documento ",doc_id
             k = k+1
 
         #apos a divisao por topicos, classificar com o svr
 	pred = {}
+	pred_topic = {}
 	for t in deals_topic:
 	     data_t = [k.get_ftrs_dict(self.new_header) for k in deals_topic[t]]
 
@@ -493,28 +544,36 @@ class machine_learning:
                   ndealstopic = len(deals_topic[t]) 
 	          for k in xrange(ndealstopic):
 		      doc_id_real = deals_topic[t][k].get_docid() 
+		      doc_id = docids[doc_id_real]
 		      self.__pred[doc_id_real] = deals_topic[t][k].get_pred()
-		      pred[docids[doc_id_real]] = deals_topic[t][k].get_pred()
+		      pred[doc_id] = deals_topic[t][k].get_pred()
+		      if (doc_id in pred_topic):
+			  pred_topic[doc_id].append(t)
+		      else:
+			  pred_topic[doc_id] = [t]
+			  
 
         
-        return pred
+        return (pred,pred_topic,deals_topic)
 
-    def one_class(self,target):
+    def number_class(self,target):
 	"""
-	Checa se soh existe apenas uma classe neste grupo
+	conta o numero de classes no alvo deste treino
 	"""
 	if (len(target)==1):
-	    return True
+	    return 1
 	else:
 	    i = 0
 	    elem  = target[i]
 	    ntargets = len(target)
+	    new_target = sorted(target)
 	    i = i+1
+	    x = 0
 	    while (i < ntargets):
-		if (target[i]!=elem):
-		    return False
+		if (new_target[i]!=elem):
+		    x = x+1
 		i = i+1
-	    return True
+	    return (x+1)
 
     def train(self,idate,date,doc_list,target_value,docids):
         """
@@ -543,7 +602,7 @@ class machine_learning:
 		 target_data_topic.append(d.get_target())
 		 #print docids[docid],",",d.get_target()
             #print "-->",t,id_data_topic
-            if (not(self.one_class(target_data_topic))):
+            if (self.number_class(target_data_topic)>=3):
 
 		 vec_train_data_topic = self.__vec.transform(train_data_topic)
 
@@ -560,24 +619,29 @@ class machine_learning:
 
 		 vec_scale = self.__scaler[t].transform(vec_train_data_topic)
 
-		 self.model_deal_size[t].fit(vec_scale, target_data_topic)
-		 pred_t = self.model_deal_size[t].predict(vec_scale)
-		 #print pred_t,target_data_topic
-		 #soh no primeiro dia do treino
-		 if (idate==0):
-		      k = 0
-		      for iddoc in id_data_topic:
-		          self.__pred[iddoc] = pred_t[k]
-		          k = k+1
+                 try:
+		      self.model_deal_size[t].fit(vec_scale, target_data_topic)
+		      pred_t = self.model_deal_size[t].predict(vec_scale)
+		      #print pred_t,target_data_topic
+		      #soh no primeiro dia do treino
+		      if (idate==0):
+		          k = 0
+		          for iddoc in id_data_topic:
+		             self.__pred[iddoc] = pred_t[k]
+		             k = k+1
+		 except ZeroDivisionError:
+		     print "*** Zero Division Error ***"
+		     print target_data_topic
+		     sys.exit(-1)
 
 	         #joblib.dump(self.model_deal_size[t],svr_model_file)
             else:
 	         #nao sei bem ainda o que faezr na predicao deste caso
 	         self.model_deal_size[t] = None
-            k = 0
-            for iddoc in id_data_topic:
-	         self.__pred[iddoc] = target_data_topic[k]
-		 k = k+1
+                 k = 0
+                 for iddoc in id_data_topic:
+	            self.__pred[iddoc] = target_data_topic[k]
+		    k = k+1
 	    
         
 
@@ -594,10 +658,18 @@ class machine_learning:
 	self.txt_ftrs = doc_list_txt_ftrs
 
         #separando em mercados
+	lda_dir = self.__config_obj.get_value("lda_dir")[0]
+        lda_file = lda_dir + "topic_model_" + topic_strategic + "_" + str(k) + ".plk"
+
+	#if (os.path.isfile(lda_file)):
+	#   self.model_topic = models.LdaModel.load(lda_file)
+	#    self.model_topic.print_topics(num_topics=self.k)
+	#else:
 	self.model_topic = ldamodel.LdaModel(\
 		corpus=doc_list_txt_ftrs,id2word=dictionary,\
 		num_topics=self.k,iterations=100,passes=2,\
 		gamma_threshold=0.00001)
+	     #self.model_topic.save(lda_file)
 
         #lendo features para o SVR
 	doc_list,target_value = self.read_features(file_features)
@@ -621,23 +693,26 @@ class machine_learning:
 		self.train(i,dias,doc_list,target_value,docids)
 		print "Teste: ",dias[i+1]
                 total += len(doc_list[dias[i+1]])
-		pred = self.test(i,dias,doc_list,docids,target_value)
+		pred,pred_topic,deals_bytopic = self.test(i,dias,doc_list,docids,target_value)
 		#target_value esta por data
-		#pred_em = self.expectation_maximization(i,dias,pred,docids)
+		#pred_em = self.expectation_maximization(docids,deals_bytopic)
 		#print pred
 	        #self.write_predictions(pred_em,pred_file)
-	        self.write_predictions(pred,pred_file)
+	        self.write_predictions(pred,pred_file,pred_topic,docids)
 
 
-    def write_predictions(self,predictions,pred_file):
+    def write_predictions(self,predictions,pred_file,pred_topic,docids):
 
 	fd = open(pred_file,"a")
-
+	concatLst = lambda x,y: x + "," + y
+	#for doc in predictions:
+	#    #fd.write("%d,%s,%f\n" %(topic,doc,pred))
+	#    fd.write("%s,%f\n" %(doc,predictions[doc]))
+        #    fd.write('\n')
 	for doc in predictions:
-	         #fd.write("%d,%s,%f\n" %(topic,doc,pred))
-	         fd.write("%s,%f\n" %(doc,predictions[doc]))
-            #fd.write('\n')
-
+	    if doc in pred_topic:
+		topics = reduce(concatLst,map(str,pred_topic[doc]))
+	        fd.write("%d,%d,%s\n" %(doc,predictions[doc],topics))
 	fd.close()
 
 
@@ -647,10 +722,12 @@ if __name__ == "__main__":
     # Os numeros estao melhores
     #Esquema de peso utilizado: term spread
     k = int(sys.argv[1])
-    ml_obj = machine_learning("options.conf",k)
+    options_file = sys.argv[2]
+    ml_obj = machine_learning(options_file,k)
 
     topic_strategic = ml_obj.get_conf_field("topic")[0]
-    pred_file = "pred_" + topic_strategic + "_" + str(k) + ".out"
+    ts_str = "%.0f" % time.time()
+    pred_file = "pred_" + topic_strategic + "_" + str(k) + "_" + ts_str +  ".out"
 
     jsondir = ml_obj.get_conf_field("jsondir")[0]
 
