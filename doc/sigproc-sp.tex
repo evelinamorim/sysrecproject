@@ -24,8 +24,8 @@ Evelin C. F. de Amorim \\
 
 Daily-deals sites (DDSs) are web portals that offer discount coupons for services 
 or products. Thus, customers are attracted by the captivate discounts. 
-DDSs profit by the amount of coupons sold and  merchants, who offer  
-services and products, also profit by increasing the amount of clients 
+DDSs gain profit by the amount of coupons sold and  merchants, who offer  
+services and products, gain profit by increasing the amount of clients 
 . However, DDSs know 
 beforehand the number of coupons sold, can benefit featured offers and 
 bussiness strategies.
@@ -33,18 +33,19 @@ bussiness strategies.
 \emph{Deal size prediction} is the name of the task that predicts the number 
 of coupons sold in a given offer. Some research proposed descriptive models 
 to deal size, nonetheless few attempts have been made in order to 
-predict deal size. Due to its practical importance, we proposed a 
+predict deal size. Due to its practical importance, we propose a 
 novel method to predict deal size. This method is based on an existing method, 
-which considers latent markets in given catalog of offers. The existing method 
-assigns only one latent market for deal, and we propose to 
+which considers latent markets in given catalog of deals. The existing method 
+assigns only one latent market for a deal, and we propose to 
 assign the deal to the most likely markets.
 
-Our experiments performed experiments in order to detect 
+We perform experiments in order to detect 
 only error in regression phase. The competition model is still in 
 development, but we explain the competition model we intend to 
 implement
-. The results show evidences that include all probable markets,  
-for a given deal, can increase error. Also, we tested another strategy that 
+. The results show evidences that 
+include all probable markets,  
+for a given deal, increase error. Also, we test another strategy that 
 consider only markets with at least 0.3 of probability to own a given deal.
 
 %the results balbla
@@ -71,14 +72,14 @@ will be disregarded in favor of others coupons.
 
 Coupons that provide similar services or products can bring doubt to 
 consumer mind. Thefore, the number of coupons sold of one deal  
-can affect the number of coupons solld of another similar deal. From this ideia, 
+can affect the number of coupons sold of another similar deal. From this ideia, 
 Lacerda et. al ~\cite{lacerda2014context} proposed a 
 strategy, called \emph{Competitive Business Market Prediction} 
 (CPMB),
 that assigns each deal in the DDS catalog to a latent 
 market. CPMB strategy is composed by three main steps:
 the first step divides the catalog of deals into markets 
-by Latent Dirichlet Allocation (LDA); the second step perfoms 
+by using Latent Dirichlet Allocation (LDA); the second step perfoms 
 regression training in each market; and the third step executes an 
 expectation-maximization  procedure in order to consider the 
 competition among the deals in the same market.
