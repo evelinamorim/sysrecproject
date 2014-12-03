@@ -264,17 +264,19 @@ we tested is different from the numbers reported by Byers.
 
 The deals from living social dataset were collected between March 21st and 
 July 3rd, 2011. The textual features from these dataset were crawled in 
-September 24th, 2014. From the original dataset, we excluded 19 deals, 
-resulting in 2590 deals. The deals from groupon were not tested, due to 
-time constranints. We depicted the distribution of deal size of 
+September 24th, 2014. From the original dataset, we excluded nineteen deals, 
+resulting in 2590 deals. The deals from groupon were tested, however due to 
+time constraints only one test was performed. From the original groupon 
+dataset, we excluded five deals, resulting in 16685 deals.
+
+We depicted the distribution of deal size of 
 both datasets in Figure \ref{dealsize}. The distributions of deal 
-sizes resemble an exponential distribution: few deals with low deals sizes 
-and the most of them between median and the maximum value.
+sizes resemble an exponential distribution: few deals with low deal sizes. 
 
 \begin{figure}[H]
     \centering
-    \includegraphics[scale=0.5]{dealsizels.png}
-    \includegraphics[scale=0.5]{dealsizegroupon.png}
+    \includegraphics[scale=0.4]{dealsizels1.png}
+    \includegraphics[scale=0.4]{dealsizegroupon1.png}
     \caption{Distribution of Deal Size in the Dataset}
     \label{dealsize}
 \end{figure}
@@ -331,7 +333,7 @@ markets.
 
 \begin{table}[H]
     \centering
-    \caption{RMSE for all the strategies and 30 markets}
+    \caption{RMSE for all the strategies and 30 markets in Living Social Dataset}
     \label{rmsetable}
     \begin{tabular}{lc} \hline
 	Strategy & RMSE \\ \hline \hline
@@ -341,12 +343,27 @@ markets.
     \end{tabular}
 \end{table}
 
+The Groupon dataset was tested only once, therefore the results in Table 
+\ref{rmsetablegroupon} are just for curiosity purposes.
+
+\begin{table}[H]
+    \centering
+    \caption{RMSE for all the strategies and 50 markets in Groupon Dataset}
+    \label{rmsetablegroupon}
+    \begin{tabular}{lc} \hline
+	Strategy & RMSE \\ \hline \hline
+	Best & 0.87\\
+        All & 1.07 \\
+	Threshold & 1.00 \\ \hline
+    \end{tabular}
+\end{table}
+
 The results we obtain are slightly better that Lacerda reports, 
 however our dataset is different and we also experimented 
 linear kernel in our grid search. 
 
 The Figure ~\ref{rmsemarkets} presents a graph of the error 
-for different values of markets. The behavior of 
+for different values of markets in Living Social Dataset. The behavior of 
 both strategies are similar to the Lacerda's strategy. We observe that 
 the behavior of \emph{Best} strategy is consistently better 
 than \emph{All} strategy. While the \emph{threshold} strategy is better 
@@ -356,12 +373,12 @@ the other two strategies.
 \begin{figure}[H]
     \centering
     \includegraphics[scale=0.5]{rrsemarkets.png}
-    \caption{RMSE vs. \#Markets}
+    \caption{RMSE vs. \#Markets for Living Social Dataset}
     \label{rmsemarkets}
 \end{figure}
 
 
-The errors for each topic in one execution 
+The errors for each topic in one execution  in Living Social dataset
 is presented by Table \ref{errortopic}. In some markets, 
 All strategy performed well, this usually happens when 
 LDA defined a miscellaneous market and also there is a 
@@ -376,7 +393,7 @@ it is an evidence that the dataset is unbalanced.
 \begin{table}[h]
 \centering
 \label{errortopic}
-\caption{Error by Topic in one Execution}
+\caption{Error by Topic in one Execution in Living Social Dataset}
 \begin{tabular}{lllll}\hline
 Topic & \#docs & Best & All    & Threshold     \\ \hline \hline
 0     & 95    & 0.57  & 0.65 & 0.54 \\
